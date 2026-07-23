@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Phrase Highlight</title>
+    <title>Bard Teleprompter - Top Bar Mic</title>
     <style>
         :root {
             --bg-color: #050505;
             --panel-bg: rgba(18, 18, 22, 0.85);
             --border-color: #2a2a35;
             --accent-blue: #2563eb;
-            --accent-blue-hover: #1d4ed8;
             --accent-green: #16a34a;
-            --text-main: #64748b; /* Testo non ancora cantato */
-            --text-highlight: #ffffff; /* Testo cantato */
+            --text-main: #64748b;
+            --text-highlight: #ffffff;
             --guideline-color: rgba(234, 179, 8, 0.35);
         }
 
@@ -38,7 +37,7 @@
             padding: 12px 20px;
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
             box-sizing: border-box;
             z-index: 20;
         }
@@ -70,7 +69,6 @@
             white-space: pre-wrap;
         }
 
-        /* Stile per i blocchi di parole */
         .chunk {
             display: inline-block;
             margin: 0 4px;
@@ -84,7 +82,7 @@
         }
 
         .chunk.current {
-            color: #facc15; /* Giallo brillante per il blocco attivo */
+            color: #facc15;
             background-color: rgba(250, 204, 21, 0.1);
             text-shadow: 0 0 15px rgba(250, 204, 21, 0.6);
             transform: scale(1.04);
@@ -132,6 +130,7 @@
             align-items: center;
             gap: 8px;
             transition: all 0.2s ease;
+            white-space: nowrap;
         }
 
         label.file-btn {
@@ -139,7 +138,13 @@
             border-color: var(--accent-blue);
         }
 
-        button.active {
+        /* Pulsante microfono in alto con stile dinamico */
+        #mic-btn {
+            background: #1e1e24;
+            border-color: var(--border-color);
+        }
+
+        #mic-btn.active {
             background: var(--accent-green);
             border-color: #22c55e;
             box-shadow: 0 0 15px rgba(22, 163, 74, 0.4);
@@ -152,10 +157,12 @@
 </head>
 <body>
 
+    <!-- Barra Superiore con menu, importazione e controllo/stato microfono -->
     <div class="top-bar">
         <select id="song-select" onchange="loadSelectedSong()">
             <option value="">-- Seleziona un brano dall'archivio --</option>
         </select>
+        <button id="mic-btn" onclick="toggleVoice()">🎤 Avvia Voce</button>
         <label class="file-btn">
             📂 Importa .txt
             <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
@@ -165,11 +172,11 @@
     <div class="guideline"></div>
 
     <div id="teleprompter-container">
-Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
+Tocca qui o seleziona un brano per attivare l'ascolto vocale.
     </div>
 
+    <!-- Barra inferiore solo con Zoom e reset posizione -->
     <div class="controls">
-        <button id="mic-btn" onclick="toggleVoice()">🎤 Avvia Voce</button>
         <button onclick="adjustZoom(2)">Zoom +</button>
         <button onclick="adjustZoom(-2)">Zoom -</button>
         <button onclick="resetPosition()">Torna Su ⬆</button>
@@ -201,13 +208,9 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
 
         function loadSelectedSong() {
             let index = songSelect.value;
-            if (index === "") {
-                container.innerHTML = "Seleziona una canzone dal menu in alto.";
-                return;
-            }
+            if (index === "") return;
             renderFormattedText(songs[index].text);
             resetPosition();
-            if (isListening) toggleVoice();
         }
 
         function renderFormattedText(rawText) {
@@ -223,7 +226,6 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                 if (line.trim() === "") {
                     lineDiv.innerHTML = "<br>";
                 } else {
-                    // Raggruppa le parole in blocchi da 3 parole ciascuno (emissioni di voce collegate)
                     const chunkSize = 3;
                     for (let i = 0; i < words.length; i += chunkSize) {
                         let chunkWords = words.slice(i, i + chunkSize);
@@ -235,8 +237,6 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                         lineDiv.appendChild(span);
                         
                         allChunkElements.push(span);
-                        
-                        // Pulisce il testo del blocco per il confronto vocale
                         let cleanChunk = chunkText.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim();
                         chunkList.push(cleanChunk);
                     }
@@ -305,9 +305,7 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                 let spokenClean = transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim();
                 
                 if (spokenClean.length > 0 && chunkList.length > 0) {
-                    // Cerca se le parole pronunciate corrispondono a uno dei blocchi successivi nel testo
                     for (let i = currentIndex; i < Math.min(currentIndex + 6, chunkList.length); i++) {
-                        // Controlla se il blocco contiene la parola o la frase detta di recente
                         let parts = chunkList[i].split(" ");
                         if (parts.some(p => p.length > 2 && spokenClean.includes(p))) {
                             currentIndex = i;
@@ -319,13 +317,15 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
             };
 
             recognition.onend = function() {
-                if (isListening) recognition.start();
+                if (isListening) {
+                    try { recognition.start(); } catch(e) {}
+                }
             };
         }
 
         function toggleVoice() {
             if (!recognition) {
-                alert("Usa Google Chrome per il riconoscimento vocale.");
+                alert("Il riconoscimento vocale non è supportato da questo browser. Usa Google Chrome.");
                 return;
             }
             if (isListening) {
@@ -334,12 +334,39 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                 micBtn.classList.remove('active');
                 micBtn.innerHTML = "🎤 Avvia Voce";
             } else {
-                recognition.start();
-                isListening = true;
-                micBtn.classList.add('active');
-                micBtn.innerHTML = "🎙️ In ascolto...";
+                try {
+                    recognition.start();
+                    isListening = true;
+                    micBtn.classList.add('active');
+                    micBtn.innerHTML = "🎙️ In ascolto...";
+                } catch(e) {
+                    console.log(e);
+                }
             }
         }
+
+        // Avvio automatico al primo tocco sullo schermo per Android
+        document.body.addEventListener('click', function initAutoStart() {
+            if (!isListening && recognition) {
+                toggleVoice();
+            }
+        }, { once: true });
+
+        // Stop automatico alla chiusura o cambio scheda
+        window.addEventListener('beforeunload', function() {
+            if (isListening && recognition) {
+                recognition.stop();
+            }
+        });
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && isListening && recognition) {
+                recognition.stop();
+                isListening = false;
+                micBtn.classList.remove('active');
+                micBtn.innerHTML = "🎤 Avvia Voce";
+            }
+        });
 
         initArchive();
     </script>
