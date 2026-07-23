@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Smart Match</title>
+    <title>Bard Teleprompter - Phrase Highlight</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -70,20 +70,24 @@
             white-space: pre-wrap;
         }
 
-        .word {
+        /* Stile per i blocchi di parole */
+        .chunk {
             display: inline-block;
-            margin: 0 3px;
-            transition: color 0.1s ease, transform 0.1s ease;
+            margin: 0 4px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
         }
 
-        .word.spoken {
+        .chunk.spoken {
             color: var(--text-highlight);
         }
 
-        .word.current {
-            color: #facc15; /* Giallo brillante per la parola esatta */
-            text-shadow: 0 0 15px rgba(250, 204, 21, 0.8);
-            transform: scale(1.08);
+        .chunk.current {
+            color: #facc15; /* Giallo brillante per il blocco attivo */
+            background-color: rgba(250, 204, 21, 0.1);
+            text-shadow: 0 0 15px rgba(250, 204, 21, 0.6);
+            transform: scale(1.04);
         }
 
         .guideline {
@@ -175,9 +179,9 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
         let isListening = false;
         let recognition;
         let currentFontSize = 28;
-        let currentWordIndex = 0;
-        let songWords = []; // Salverà le parole pulite per il confronto
-        let allWordsElements = [];
+        let currentIndex = 0;
+        let chunkList = [];
+        let allChunkElements = [];
 
         const container = document.getElementById('teleprompter-container');
         const micBtn = document.getElementById('mic-btn');
@@ -208,8 +212,8 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
 
         function renderFormattedText(rawText) {
             container.innerHTML = "";
-            allWordsElements = [];
-            songWords = [];
+            allChunkElements = [];
+            chunkList = [];
 
             let lines = rawText.split("\n");
             lines.forEach(line => {
@@ -219,23 +223,27 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                 if (line.trim() === "") {
                     lineDiv.innerHTML = "<br>";
                 } else {
-                    words.forEach(wordText => {
-                        if (wordText.trim() !== "") {
-                            let span = document.createElement("span");
-                            span.className = "word";
-                            span.textContent = wordText + " ";
-                            lineDiv.appendChild(span);
-                            
-                            allWordsElements.push(span);
-                            // Pulisce la parola da punteggiatura e la rende minuscola per un confronto sicuro
-                            let cleanWord = wordText.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"");
-                            songWords.push(cleanWord);
-                        }
-                    });
+                    // Raggruppa le parole in blocchi da 3 parole ciascuno (emissioni di voce collegate)
+                    const chunkSize = 3;
+                    for (let i = 0; i < words.length; i += chunkSize) {
+                        let chunkWords = words.slice(i, i + chunkSize);
+                        let chunkText = chunkWords.join(" ") + " ";
+                        
+                        let span = document.createElement("span");
+                        span.className = "chunk";
+                        span.textContent = chunkText;
+                        lineDiv.appendChild(span);
+                        
+                        allChunkElements.push(span);
+                        
+                        // Pulisce il testo del blocco per il confronto vocale
+                        let cleanChunk = chunkText.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim();
+                        chunkList.push(cleanChunk);
+                    }
                 }
                 container.appendChild(lineDiv);
             });
-            currentWordIndex = 0;
+            currentIndex = 0;
         }
 
         function handleFiles(files) {
@@ -265,16 +273,16 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
 
         function resetPosition() {
             container.scrollTop = 0;
-            currentWordIndex = 0;
+            currentIndex = 0;
             updateHighlight();
         }
 
         function updateHighlight() {
-            allWordsElements.forEach((el, idx) => {
+            allChunkElements.forEach((el, idx) => {
                 el.classList.remove('current', 'spoken');
-                if (idx < currentWordIndex) {
+                if (idx < currentIndex) {
                     el.classList.add('spoken');
-                } else if (idx === currentWordIndex) {
+                } else if (idx === currentIndex) {
                     el.classList.add('current');
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
@@ -294,16 +302,15 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                     transcript += event.results[i][0].transcript;
                 }
 
-                // Estrae le parole pronunciate dall'utente pulendole
-                let spokenWords = transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim().split(/\s+/);
+                let spokenClean = transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim();
                 
-                if (spokenWords.length > 0 && songWords.length > 0) {
-                    // Prende l'ultima parola detta dall'utente e cerca dove si trova nel testo della canzone a partire dal punto attuale
-                    let lastSpoken = spokenWords[spokenWords.length - 1];
-                    
-                    for (let i = currentWordIndex; i < Math.min(currentWordIndex + 15, songWords.length); i++) {
-                        if (songWords[i] === lastSpoken) {
-                            currentWordIndex = i;
+                if (spokenClean.length > 0 && chunkList.length > 0) {
+                    // Cerca se le parole pronunciate corrispondono a uno dei blocchi successivi nel testo
+                    for (let i = currentIndex; i < Math.min(currentIndex + 6, chunkList.length); i++) {
+                        // Controlla se il blocco contiene la parola o la frase detta di recente
+                        let parts = chunkList[i].split(" ");
+                        if (parts.some(p => p.length > 2 && spokenClean.includes(p))) {
+                            currentIndex = i;
                             updateHighlight();
                             break;
                         }
