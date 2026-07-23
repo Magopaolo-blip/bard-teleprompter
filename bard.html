@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bard Teleprompter - Live Highlight</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --panel-bg: rgba(18, 18, 22, 0.85);
+            --border-color: #2a2a35;
+            --accent-blue: #2563eb;
+            --accent-blue-hover: #1d4ed8;
+            --accent-green: #16a34a;
+            --text-main: #94a3b8; /* Testo non ancora cantato più scuro per contrasto */
+            --text-highlight: #ffffff; /* Testo attivo/cantato */
+            --guideline-color: rgba(234, 179, 8, 0.35);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        .top-bar {
+            width: 100%;
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-sizing: border-box;
+            z-index: 20;
+        }
+
+        select {
+            flex: 1;
+            background: #0f0f13;
+            color: #f8fafc;
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            font-size: 16px;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #teleprompter-container {
+            flex: 1;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            overflow-y: scroll;
+            text-align: center;
+            font-size: 28px;
+            line-height: 1.8;
+            padding: 50px 24px 150px 24px;
+            scroll-behavior: smooth;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+        }
+
+        /* Stile per le singole parole nel testo */
+        .word {
+            display: inline-block;
+            margin: 0 3px;
+            transition: color 0.15s ease, text-shadow 0.15s ease;
+        }
+
+        .word.spoken {
+            color: var(--text-highlight);
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+        }
+
+        .word.current {
+            color: #facc15; /* Giallo brillante per la parola esatta in corso */
+            text-shadow: 0 0 15px rgba(250, 204, 21, 0.8);
+            transform: scale(1.05);
+        }
+
+        .guideline {
+            position: fixed;
+            top: 36%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--guideline-color);
+            pointer-events: none;
+            box-shadow: 0 0 10px var(--guideline-color);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 14px 20px;
+            box-sizing: border-box;
+            z-index: 20;
+        }
+
+        button, label.file-btn {
+            background: #1e1e24;
+            color: #f8fafc;
+            border: 1px solid var(--border-color);
+            padding: 10px 18px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        label.file-btn {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        button.active {
+            background: var(--accent-green);
+            border-color: #22c55e;
+            box-shadow: 0 0 15px rgba(22, 163, 74, 0.4);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <select id="song-select" onchange="loadSelectedSong()">
+            <option value="">-- Seleziona un brano dall'archivio --</option>
+        </select>
+        <label class="file-btn">
+            📂 Importa .txt
+            <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
+        </label>
+    </div>
+
+    <div class="guideline"></div>
+
+    <div id="teleprompter-container">
+Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
+    </div>
+
+    <div class="controls">
+        <button id="mic-btn" onclick="toggleVoice()">🎤 Avvia Voce</button>
+        <button onclick="adjustZoom(2)">Zoom +</button>
+        <button onclick="adjustZoom(-2)">Zoom -</button>
+        <button onclick="resetPosition()">Torna Su ⬆</button>
+    </div>
+
+    <script>
+        let isListening = false;
+        let recognition;
+        let currentFontSize = 28;
+        let currentWordIndex = 0;
+        let allWordsElements = [];
+
+        const container = document.getElementById('teleprompter-container');
+        const micBtn = document.getElementById('mic-btn');
+        const songSelect = document.getElementById('song-select');
+
+        let songs = JSON.parse(localStorage.getItem('bard_songs')) || [];
+
+        function initArchive() {
+            songSelect.innerHTML = `<option value="">-- Seleziona un brano (${songs.length} disponibili) --</option>`;
+            songs.forEach((song, index) => {
+                let opt = document.createElement('option');
+                opt.value = index;
+                opt.textContent = song.title;
+                songSelect.appendChild(opt);
+            });
+        }
+
+        function loadSelectedSong() {
+            let index = songSelect.value;
+            if (index === "") {
+                container.innerHTML = "Seleziona una canzone dal menu in alto.";
+                return;
+            }
+            
+            // Converte il testo in singoli elementi HTML "word" per poterli evidenziare
+            renderFormattedText(songs[index].text);
+            resetPosition();
+            if (isListening) toggleVoice();
+        }
+
+        function renderFormattedText(rawText) {
+            container.innerHTML = "";
+            allWordsElements = [];
+
+            // Divide il testo preservando gli spazi e andando a capo
+            let lines = rawText.split("\n");
+            lines.forEach(line => {
+                let lineDiv = document.createElement("div");
+                let words = line.split(" ");
+                
+                if (line.trim() === "") {
+                    lineDiv.innerHTML = "<br>";
+                } else {
+                    words.forEach(wordText => {
+                        if (wordText.trim() !== "") {
+                            let span = document.createElement("span");
+                            span.className = "word";
+                            span.textContent = wordText + " ";
+                            lineDiv.appendChild(span);
+                            allWordsElements.push(span);
+                        }
+                    });
+                }
+                container.appendChild(lineDiv);
+            });
+            currentWordIndex = 0;
+        }
+
+        function handleFiles(files) {
+            if (files.length === 0) return;
+
+            Array.from(files).forEach(file => {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    let fileContent = e.target.result;
+                    let fileTitle = file.name.replace(/\.[^/.]+$/, "");
+
+                    let existingIndex = songs.findIndex(s => s.title === fileTitle);
+                    if (existingIndex !== -1) {
+                        songs[existingIndex].text = fileContent;
+                    } else {
+                        songs.push({ title: fileTitle, text: fileContent });
+                    }
+
+                    localStorage.setItem('bard_songs', JSON.stringify(songs));
+                    initArchive();
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        function adjustZoom(amount) {
+            currentFontSize = Math.max(18, Math.min(72, currentFontSize + amount));
+            container.style.fontSize = currentFontSize + 'px';
+        }
+
+        function resetPosition() {
+            container.scrollTop = 0;
+            currentWordIndex = 0;
+            updateHighlight();
+        }
+
+        function updateHighlight() {
+            allWordsElements.forEach((el, idx) => {
+                el.classList.remove('current', 'spoken');
+                if (idx < currentWordIndex) {
+                    el.classList.add('spoken');
+                } else if (idx === currentWordIndex) {
+                    el.classList.add('current');
+                    // Fa scorrere automaticamente il contenitore per mantenere la parola corrente in evidenza
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'it-IT';
+
+            recognition.onresult = function(event) {
+                let transcript = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+                
+                // Conta quante parole sono state pronunciate per avanzare nel testo
+                let spokenWordsCount = transcript.trim().split(/\s+/).length;
+                if (spokenWordsCount > 0 && allWordsElements.length > 0) {
+                    currentWordIndex = Math.min(currentWordIndex + 1, allWordsElements.length - 1);
+                    updateHighlight();
+                }
+            };
+
+            recognition.onend = function() {
+                if (isListening) recognition.start();
+            };
+        }
+
+        function toggleVoice() {
+            if (!recognition) {
+                alert("Usa Google Chrome per il riconoscimento vocale.");
+                return;
+            }
+            if (isListening) {
+                recognition.stop();
+                isListening = false;
+                micBtn.classList.remove('active');
+                micBtn.innerHTML = "🎤 Avvia Voce";
+            } else {
+                recognition.start();
+                isListening = true;
+                micBtn.classList.add('active');
+                micBtn.innerHTML = "🎙️ In ascolto...";
+            }
+        }
+
+        initArchive();
+    </script>
+</body>
+</html>
