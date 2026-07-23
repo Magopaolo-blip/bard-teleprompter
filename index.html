@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Top Bar Mic</title>
+    <title>Bard Teleprompter - Stable Mic</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -138,7 +138,6 @@
             border-color: var(--accent-blue);
         }
 
-        /* Pulsante microfono in alto con stile dinamico */
         #mic-btn {
             background: #1e1e24;
             border-color: var(--border-color);
@@ -157,7 +156,7 @@
 </head>
 <body>
 
-    <!-- Barra Superiore con menu, importazione e controllo/stato microfono -->
+    <!-- Barra Superiore con menu, pulsante microfono e importazione -->
     <div class="top-bar">
         <select id="song-select" onchange="loadSelectedSong()">
             <option value="">-- Seleziona un brano dall'archivio --</option>
@@ -172,10 +171,10 @@
     <div class="guideline"></div>
 
     <div id="teleprompter-container">
-Tocca qui o seleziona un brano per attivare l'ascolto vocale.
+Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
     </div>
 
-    <!-- Barra inferiore solo con Zoom e reset posizione -->
+    <!-- Barra inferiore con Zoom e reset -->
     <div class="controls">
         <button onclick="adjustZoom(2)">Zoom +</button>
         <button onclick="adjustZoom(-2)">Zoom -</button>
@@ -184,7 +183,7 @@ Tocca qui o seleziona un brano per attivare l'ascolto vocale.
 
     <script>
         let isListening = false;
-        let recognition;
+        let recognition = null;
         let currentFontSize = 28;
         let currentIndex = 0;
         let chunkList = [];
@@ -289,14 +288,18 @@ Tocca qui o seleziona un brano per attivare l'ascolto vocale.
             });
         }
 
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        // Inizializzazione sicura del motore vocale compatibile con Chrome/Android
+        function setupSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'it-IT';
+            if (!SpeechRecognition) {
+                return null;
+            }
+            let rec = new SpeechRecognition();
+            rec.continuous = true;
+            rec.interimResults = true;
+            rec.lang = 'it-IT';
 
-            recognition.onresult = function(event) {
+            rec.onresult = function(event) {
                 let transcript = "";
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     transcript += event.results[i][0].transcript;
@@ -316,18 +319,24 @@ Tocca qui o seleziona un brano per attivare l'ascolto vocale.
                 }
             };
 
-            recognition.onend = function() {
+            rec.onend = function() {
                 if (isListening) {
-                    try { recognition.start(); } catch(e) {}
+                    try { rec.start(); } catch(e) {}
                 }
             };
+
+            return rec;
         }
 
         function toggleVoice() {
             if (!recognition) {
+                recognition = setupSpeechRecognition();
+            }
+            if (!recognition) {
                 alert("Il riconoscimento vocale non è supportato da questo browser. Usa Google Chrome.");
                 return;
             }
+
             if (isListening) {
                 recognition.stop();
                 isListening = false;
@@ -340,25 +349,17 @@ Tocca qui o seleziona un brano per attivare l'ascolto vocale.
                     micBtn.classList.add('active');
                     micBtn.innerHTML = "🎙️ In ascolto...";
                 } catch(e) {
-                    console.log(e);
+                    // Se l'istanza è già occupata, la ricreiamo al volo
+                    recognition = setupSpeechRecognition();
+                    recognition.start();
+                    isListening = true;
+                    micBtn.classList.add('active');
+                    micBtn.innerHTML = "🎙️ In ascolto...";
                 }
             }
         }
 
-        // Avvio automatico al primo tocco sullo schermo per Android
-        document.body.addEventListener('click', function initAutoStart() {
-            if (!isListening && recognition) {
-                toggleVoice();
-            }
-        }, { once: true });
-
-        // Stop automatico alla chiusura o cambio scheda
-        window.addEventListener('beforeunload', function() {
-            if (isListening && recognition) {
-                recognition.stop();
-            }
-        });
-
+        // Stop di sicurezza se si cambia scheda o si riduce a icona il tablet
         document.addEventListener('visibilitychange', function() {
             if (document.hidden && isListening && recognition) {
                 recognition.stop();
