@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Clean</title>
+    <title>Bard Teleprompter - Fixed Layout</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -31,10 +31,10 @@
             background: var(--panel-bg);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--border-color);
-            padding: 12px 20px;
+            padding: 12px 16px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             box-sizing: border-box;
             z-index: 20;
         }
@@ -44,11 +44,28 @@
             background: #0f0f13;
             color: #f8fafc;
             border: 1px solid var(--border-color);
-            padding: 10px 14px;
-            font-size: 16px;
+            padding: 10px 12px;
+            font-size: 15px;
             border-radius: 8px;
             outline: none;
             cursor: pointer;
+            min-width: 0; /* Evita che il menu si espanda oltre lo schermo su mobile */
+        }
+
+        label.file-btn {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #f8fafc;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            flex-shrink: 0; /* Impedisce al pulsante di schiacciarsi o uscire fuori */
         }
 
         #teleprompter-container {
@@ -59,7 +76,7 @@
             text-align: center;
             font-size: 32px;
             line-height: 1.6;
-            padding: 40px 30px 150px 30px;
+            padding: 40px 20px 150px 20px;
             box-sizing: border-box;
             white-space: pre-wrap;
             scroll-behavior: smooth;
@@ -77,31 +94,26 @@
             justify-content: center;
             align-items: center;
             flex-wrap: wrap;
-            gap: 12px;
-            padding: 14px 20px;
+            gap: 10px;
+            padding: 12px 16px;
             box-sizing: border-box;
             z-index: 20;
         }
 
-        button, label.file-btn {
+        button {
             background: #1e1e24;
             color: #f8fafc;
             border: 1px solid var(--border-color);
-            padding: 10px 18px;
-            font-size: 15px;
+            padding: 10px 16px;
+            font-size: 14px;
             font-weight: 500;
             cursor: pointer;
             border-radius: 8px;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             transition: all 0.2s ease;
             white-space: nowrap;
-        }
-
-        label.file-btn {
-            background: var(--accent-blue);
-            border-color: var(--accent-blue);
         }
 
         input[type="file"] {
@@ -111,19 +123,19 @@
 </head>
 <body>
 
-    <!-- Barra Superiore con menu e importazione -->
+    <!-- Barra Superiore con Importa a sinistra e Menu -->
     <div class="top-bar">
-        <select id="song-select" onchange="loadSelectedSong()">
-            <option value="">-- Seleziona un brano dall'archivio --</option>
-        </select>
         <label class="file-btn">
-            📂 Importa .txt
+            📂 Importa
             <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
         </label>
+        <select id="song-select" onchange="loadSelectedSong()">
+            <option value="">-- Seleziona brano --</option>
+        </select>
     </div>
 
-    <!-- Contenitore del testo a schermo intero -->
-    <div id="teleprompter-container">
+    <!-- Contenitore del testo con scorrimento e tap di pagina -->
+    <div id="teleprompter-container" onclick="handleScreenTap(event)">
 Seleziona una canzone dal menu in alto.
     </div>
 
@@ -142,7 +154,7 @@ Seleziona una canzone dal menu in alto.
         let songs = JSON.parse(localStorage.getItem('bard_songs')) || [];
 
         function initArchive() {
-            songSelect.innerHTML = `<option value="">-- Seleziona un brano (${songs.length} disponibili) --</option>`;
+            songSelect.innerHTML = `<option value="">-- Seleziona brano (${songs.length}) --</option>`;
             songs.forEach((song, index) => {
                 let opt = document.createElement('option');
                 opt.value = index;
@@ -176,6 +188,18 @@ Seleziona una canzone dal menu in alto.
                 };
                 reader.readAsText(file);
             });
+        }
+
+        function handleScreenTap(event) {
+            let screenHeight = window.innerHeight;
+            let clickY = event.clientY;
+            let jumpAmount = screenHeight * 0.6;
+
+            if (clickY < screenHeight * 0.3) {
+                container.scrollBy({ top: -jumpAmount, behavior: 'smooth' });
+            } else {
+                container.scrollBy({ top: jumpAmount, behavior: 'smooth' });
+            }
         }
 
         function adjustZoom(amount) {
