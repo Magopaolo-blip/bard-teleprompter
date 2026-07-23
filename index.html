@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - 2 Lines Anchor</title>
+    <title>Bard Teleprompter - 3 Lines Anchor</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -134,7 +134,7 @@
         </select>
     </div>
 
-    <!-- Contenitore del testo con ancoraggio esatto a 2 righe -->
+    <!-- Contenitore del testo con ancoraggio a 3 righe -->
     <div id="teleprompter-container" onclick="handleScreenTap(event)">
 Seleziona una canzone dal menu in alto.
     </div>
@@ -197,17 +197,17 @@ Seleziona una canzone dal menu in alto.
             // Altezza visibile del contenitore di testo
             let visibleArea = container.clientHeight;
             
-            // Calcolo esatto dello spazio occupato da 2 righe (tenendo conto del font e dell'interlinea 1.6)
-            let twoLinesHeight = currentFontSize * 1.6 * 2; 
+            // Calcolo esatto dello spazio occupato da 3 righe (con interlinea 1.6)
+            let threeLinesHeight = currentFontSize * 1.6 * 3; 
             
-            // Il salto sarà l'intera schermata meno lo spazio esatto di 2 righe
-            let jumpAmount = visibleArea - twoLinesHeight;
+            // Il salto lascia esattamente le ultime 3 righe in cima allo schermo
+            let jumpAmount = visibleArea - threeLinesHeight;
 
             if (clickY < screenHeight * 0.3) {
-                // Testo in alto: torna indietro di una schermata pulita
+                // Torna indietro
                 container.scrollBy({ top: -jumpAmount, behavior: 'smooth' });
             } else {
-                // Testo al centro: va avanti lasciando le ultime 2 righe in cima
+                // Va avanti lasciando 3 righe di margine in alto
                 container.scrollBy({ top: jumpAmount, behavior: 'smooth' });
             }
         }
