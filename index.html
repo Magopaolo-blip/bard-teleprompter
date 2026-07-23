@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Touch & Scroll</title>
+    <title>Bard Teleprompter - Clean</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -54,13 +54,12 @@
         #teleprompter-container {
             flex: 1;
             width: 100%;
-            max-width: 900px;
-            margin: 0 auto;
+            margin: 0;
             overflow-y: scroll;
             text-align: center;
             font-size: 32px;
             line-height: 1.6;
-            padding: 40px 24px 150px 24px;
+            padding: 40px 30px 150px 30px;
             box-sizing: border-box;
             white-space: pre-wrap;
             scroll-behavior: smooth;
@@ -105,16 +104,6 @@
             border-color: var(--accent-blue);
         }
 
-        .hint-badge {
-            background: rgba(250, 204, 21, 0.15);
-            color: #facc15;
-            border: 1px solid rgba(250, 204, 21, 0.3);
-            padding: 10px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
         input[type="file"] {
             display: none;
         }
@@ -127,14 +116,13 @@
         <select id="song-select" onchange="loadSelectedSong()">
             <option value="">-- Seleziona un brano dall'archivio --</option>
         </select>
-        <div class="hint-badge">👆 Scorri liberamente col dito</div>
         <label class="file-btn">
             📂 Importa .txt
             <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
         </label>
     </div>
 
-    <!-- Contenitore del testo con scorrimento libero -->
+    <!-- Contenitore del testo a schermo intero -->
     <div id="teleprompter-container">
 Seleziona una canzone dal menu in alto.
     </div>
