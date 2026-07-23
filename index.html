@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Stable Mic</title>
+    <title>Bard Teleprompter - Tap Scroll</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -27,6 +27,8 @@
             height: 100vh;
             overflow: hidden;
             box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .top-bar {
@@ -63,7 +65,7 @@
             text-align: center;
             font-size: 28px;
             line-height: 1.8;
-            padding: 50px 24px 150px 24px;
+            padding: 50px 24px 250px 24px;
             scroll-behavior: smooth;
             box-sizing: border-box;
             white-space: pre-wrap;
@@ -138,15 +140,14 @@
             border-color: var(--accent-blue);
         }
 
-        #mic-btn {
-            background: #1e1e24;
-            border-color: var(--border-color);
-        }
-
-        #mic-btn.active {
-            background: var(--accent-green);
-            border-color: #22c55e;
-            box-shadow: 0 0 15px rgba(22, 163, 74, 0.4);
+        .hint-badge {
+            background: rgba(250, 204, 21, 0.15);
+            color: #facc15;
+            border: 1px solid rgba(250, 204, 21, 0.3);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
         }
 
         input[type="file"] {
@@ -156,12 +157,12 @@
 </head>
 <body>
 
-    <!-- Barra Superiore con menu, pulsante microfono e importazione -->
+    <!-- Barra Superiore con menu e importazione -->
     <div class="top-bar">
         <select id="song-select" onchange="loadSelectedSong()">
             <option value="">-- Seleziona un brano dall'archivio --</option>
         </select>
-        <button id="mic-btn" onclick="toggleVoice()">🎤 Avvia Voce</button>
+        <div class="hint-badge">👆 Tocca lo schermo per avanzare</div>
         <label class="file-btn">
             📂 Importa .txt
             <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
@@ -170,8 +171,8 @@
 
     <div class="guideline"></div>
 
-    <div id="teleprompter-container">
-Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
+    <div id="teleprompter-container" onclick="advanceScroll()">
+Seleziona una canzone e tocca lo schermo per far scorrere il testo riga dopo riga.
     </div>
 
     <!-- Barra inferiore con Zoom e reset -->
@@ -182,15 +183,11 @@ Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
     </div>
 
     <script>
-        let isListening = false;
-        let recognition = null;
         let currentFontSize = 28;
         let currentIndex = 0;
-        let chunkList = [];
         let allChunkElements = [];
 
         const container = document.getElementById('teleprompter-container');
-        const micBtn = document.getElementById('mic-btn');
         const songSelect = document.getElementById('song-select');
 
         let songs = JSON.parse(localStorage.getItem('bard_songs')) || [];
@@ -215,7 +212,6 @@ Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
         function renderFormattedText(rawText) {
             container.innerHTML = "";
             allChunkElements = [];
-            chunkList = [];
 
             let lines = rawText.split("\n");
             lines.forEach(line => {
@@ -236,8 +232,6 @@ Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
                         lineDiv.appendChild(span);
                         
                         allChunkElements.push(span);
-                        let cleanChunk = chunkText.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim();
-                        chunkList.push(cleanChunk);
                     }
                 }
                 container.appendChild(lineDiv);
@@ -245,24 +239,11 @@ Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
             currentIndex = 0;
         }
 
-        function handleFiles(files) {
-            if (files.length === 0) return;
-            Array.from(files).forEach(file => {
-                let reader = new FileReader();
-                reader.onload = function(e) {
-                    let fileContent = e.target.result;
-                    let fileTitle = file.name.replace(/\.[^/.]+$/, "");
-                    let existingIndex = songs.findIndex(s => s.title === fileTitle);
-                    if (existingIndex !== -1) {
-                        songs[existingIndex].text = fileContent;
-                    } else {
-                        songs.push({ title: fileTitle, text: fileContent });
-                    }
-                    localStorage.setItem('bard_songs', JSON.stringify(songs));
-                    initArchive();
-                };
-                reader.readAsText(file);
-            });
+        function advanceScroll() {
+            if (allChunkElements.length === 0) return;
+            // Avanza di circa mezza riga / 4 blocchi ad ogni tocco
+            currentIndex = Math.min(currentIndex + 4, allChunkElements.length - 1);
+            updateHighlight();
         }
 
         function adjustZoom(amount) {
@@ -287,87 +268,6 @@ Seleziona una canzone dal menu in alto, premi "Avvia Voce" e inizia a cantare!
                 }
             });
         }
-
-        // Inizializzazione sicura del motore vocale compatibile con Chrome/Android
-        function setupSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                return null;
-            }
-            let rec = new SpeechRecognition();
-            rec.continuous = true;
-            rec.interimResults = true;
-            rec.lang = 'it-IT';
-
-            rec.onresult = function(event) {
-                let transcript = "";
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    transcript += event.results[i][0].transcript;
-                }
-
-                let spokenClean = transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim();
-                
-                if (spokenClean.length > 0 && chunkList.length > 0) {
-                    for (let i = currentIndex; i < Math.min(currentIndex + 6, chunkList.length); i++) {
-                        let parts = chunkList[i].split(" ");
-                        if (parts.some(p => p.length > 2 && spokenClean.includes(p))) {
-                            currentIndex = i;
-                            updateHighlight();
-                            break;
-                        }
-                    }
-                }
-            };
-
-            rec.onend = function() {
-                if (isListening) {
-                    try { rec.start(); } catch(e) {}
-                }
-            };
-
-            return rec;
-        }
-
-        function toggleVoice() {
-            if (!recognition) {
-                recognition = setupSpeechRecognition();
-            }
-            if (!recognition) {
-                alert("Il riconoscimento vocale non è supportato da questo browser. Usa Google Chrome.");
-                return;
-            }
-
-            if (isListening) {
-                recognition.stop();
-                isListening = false;
-                micBtn.classList.remove('active');
-                micBtn.innerHTML = "🎤 Avvia Voce";
-            } else {
-                try {
-                    recognition.start();
-                    isListening = true;
-                    micBtn.classList.add('active');
-                    micBtn.innerHTML = "🎙️ In ascolto...";
-                } catch(e) {
-                    // Se l'istanza è già occupata, la ricreiamo al volo
-                    recognition = setupSpeechRecognition();
-                    recognition.start();
-                    isListening = true;
-                    micBtn.classList.add('active');
-                    micBtn.innerHTML = "🎙️ In ascolto...";
-                }
-            }
-        }
-
-        // Stop di sicurezza se si cambia scheda o si riduce a icona il tablet
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden && isListening && recognition) {
-                recognition.stop();
-                isListening = false;
-                micBtn.classList.remove('active');
-                micBtn.innerHTML = "🎤 Avvia Voce";
-            }
-        });
 
         initArchive();
     </script>
