@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Fixed Layout</title>
+    <title>Bard Teleprompter - Perfect Jump</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -49,7 +49,7 @@
             border-radius: 8px;
             outline: none;
             cursor: pointer;
-            min-width: 0; /* Evita che il menu si espanda oltre lo schermo su mobile */
+            min-width: 0;
         }
 
         label.file-btn {
@@ -65,7 +65,7 @@
             align-items: center;
             gap: 6px;
             white-space: nowrap;
-            flex-shrink: 0; /* Impedisce al pulsante di schiacciarsi o uscire fuori */
+            flex-shrink: 0;
         }
 
         #teleprompter-container {
@@ -134,7 +134,7 @@
         </select>
     </div>
 
-    <!-- Contenitore del testo con scorrimento e tap di pagina -->
+    <!-- Contenitore del testo con scorrimento e tap di pagina intelligente -->
     <div id="teleprompter-container" onclick="handleScreenTap(event)">
 Seleziona una canzone dal menu in alto.
     </div>
@@ -193,11 +193,19 @@ Seleziona una canzone dal menu in alto.
         function handleScreenTap(event) {
             let screenHeight = window.innerHeight;
             let clickY = event.clientY;
-            let jumpAmount = screenHeight * 0.6;
+            
+            // Altezza utile visibile del contenitore di testo (escludendo barre)
+            let visibleArea = container.clientHeight;
+            
+            // Lasciamo visibile l'altezza di circa un paio di righe (circa 90 pixel o basato sul font) come "ancora"
+            let overlapSpace = currentFontSize * 2.5; 
+            let jumpAmount = visibleArea - overlapSpace;
 
             if (clickY < screenHeight * 0.3) {
+                // Pagina Indietro: sale lasciando un margine di sicurezza
                 container.scrollBy({ top: -jumpAmount, behavior: 'smooth' });
             } else {
+                // Pagina Avanti: scende mantenendo l'ultima parte visibile in alto
                 container.scrollBy({ top: jumpAmount, behavior: 'smooth' });
             }
         }
