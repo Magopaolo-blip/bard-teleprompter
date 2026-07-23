@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Tap Scroll</title>
+    <title>Bard Teleprompter - Page Turn & Zoom</title>
     <style>
         :root {
             --bg-color: #050505;
             --panel-bg: rgba(18, 18, 22, 0.85);
             --border-color: #2a2a35;
             --accent-blue: #2563eb;
-            --accent-green: #16a34a;
-            --text-main: #64748b;
-            --text-highlight: #ffffff;
+            --text-main: #f8fafc;
             --guideline-color: rgba(234, 179, 8, 0.35);
         }
 
@@ -61,44 +59,16 @@
             width: 100%;
             max-width: 900px;
             margin: 0 auto;
-            overflow-y: scroll;
+            overflow-y: hidden;
             text-align: center;
-            font-size: 28px;
-            line-height: 1.8;
-            padding: 50px 24px 250px 24px;
-            scroll-behavior: smooth;
+            font-size: 32px;
+            line-height: 1.6;
+            padding: 40px 24px;
             box-sizing: border-box;
             white-space: pre-wrap;
-        }
-
-        .chunk {
-            display: inline-block;
-            margin: 0 4px;
-            padding: 2px 4px;
-            border-radius: 4px;
-            transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
-        }
-
-        .chunk.spoken {
-            color: var(--text-highlight);
-        }
-
-        .chunk.current {
-            color: #facc15;
-            background-color: rgba(250, 204, 21, 0.1);
-            text-shadow: 0 0 15px rgba(250, 204, 21, 0.6);
-            transform: scale(1.04);
-        }
-
-        .guideline {
-            position: fixed;
-            top: 36%;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background-color: var(--guideline-color);
-            pointer-events: none;
-            box-shadow: 0 0 10px var(--guideline-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .controls {
@@ -162,30 +132,29 @@
         <select id="song-select" onchange="loadSelectedSong()">
             <option value="">-- Seleziona un brano dall'archivio --</option>
         </select>
-        <div class="hint-badge">👆 Tocca lo schermo per avanzare</div>
+        <div class="hint-badge">👆 Centro: Pagina Avanti | Alto: Pagina Indietro</div>
         <label class="file-btn">
             📂 Importa .txt
             <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
         </label>
     </div>
 
-    <div class="guideline"></div>
-
-    <div id="teleprompter-container" onclick="advanceScroll()">
-Seleziona una canzone e tocca lo schermo per far scorrere il testo riga dopo riga.
+    <!-- Contenitore del testo a pagine -->
+    <div id="teleprompter-container" onclick="handleScreenTap(event)">
+Seleziona una canzone dal menu in alto.
     </div>
 
     <!-- Barra inferiore con Zoom e reset -->
     <div class="controls">
         <button onclick="adjustZoom(2)">Zoom +</button>
         <button onclick="adjustZoom(-2)">Zoom -</button>
-        <button onclick="resetPosition()">Torna Su ⬆</button>
+        <button onclick="resetPosition()">Torna a Inizio ⬆</button>
     </div>
 
     <script>
-        let currentFontSize = 28;
-        let currentIndex = 0;
-        let allChunkElements = [];
+        let currentFontSize = 32;
+        let pages = [];
+        let currentPageIndex = 0;
 
         const container = document.getElementById('teleprompter-container');
         const songSelect = document.getElementById('song-select');
@@ -205,68 +174,86 @@ Seleziona una canzone e tocca lo schermo per far scorrere il testo riga dopo rig
         function loadSelectedSong() {
             let index = songSelect.value;
             if (index === "") return;
-            renderFormattedText(songs[index].text);
-            resetPosition();
+            splitIntoPages(songs[index].text);
+            currentPageIndex = 0;
+            renderCurrentPage();
         }
 
-        function renderFormattedText(rawText) {
-            container.innerHTML = "";
-            allChunkElements = [];
-
-            let lines = rawText.split("\n");
-            lines.forEach(line => {
-                let lineDiv = document.createElement("div");
-                let words = line.split(" ");
-                
-                if (line.trim() === "") {
-                    lineDiv.innerHTML = "<br>";
-                } else {
-                    const chunkSize = 3;
-                    for (let i = 0; i < words.length; i += chunkSize) {
-                        let chunkWords = words.slice(i, i + chunkSize);
-                        let chunkText = chunkWords.join(" ") + " ";
-                        
-                        let span = document.createElement("span");
-                        span.className = "chunk";
-                        span.textContent = chunkText;
-                        lineDiv.appendChild(span);
-                        
-                        allChunkElements.push(span);
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            Array.from(files).forEach(file => {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    let fileContent = e.target.result;
+                    let fileTitle = file.name.replace(/\.[^/.]+$/, "");
+                    let existingIndex = songs.findIndex(s => s.title === fileTitle);
+                    if (existingIndex !== -1) {
+                        songs[existingIndex].text = fileContent;
+                    } else {
+                        songs.push({ title: fileTitle, text: fileContent });
                     }
-                }
-                container.appendChild(lineDiv);
+                    localStorage.setItem('bard_songs', JSON.stringify(songs));
+                    initArchive();
+                };
+                reader.readAsText(file);
             });
-            currentIndex = 0;
         }
 
-        function advanceScroll() {
-            if (allChunkElements.length === 0) return;
-            // Avanza di circa mezza riga / 4 blocchi ad ogni tocco
-            currentIndex = Math.min(currentIndex + 4, allChunkElements.length - 1);
-            updateHighlight();
+        function splitIntoPages(rawText) {
+            pages = [];
+            let lines = rawText.split("\n");
+            let currentPageLines = [];
+            
+            lines.forEach(line => {
+                currentPageLines.push(line);
+                if (currentPageLines.length >= 6) {
+                    pages.push(currentPageLines.join("\n"));
+                    currentPageLines = [];
+                }
+            });
+            if (currentPageLines.length > 0) {
+                pages.push(currentPageLines.join("\n"));
+            }
+            if (pages.length === 0) {
+                pages.push(rawText);
+            }
+        }
+
+        function renderCurrentPage() {
+            if (pages.length === 0) return;
+            container.textContent = pages[currentPageIndex];
+        }
+
+        function handleScreenTap(event) {
+            if (pages.length === 0) return;
+            
+            let screenHeight = window.innerHeight;
+            let clickY = event.clientY;
+
+            // Se tocchi nella parte alta dello schermo -> Pagina Indietro
+            if (clickY < screenHeight * 0.3) {
+                if (currentPageIndex > 0) {
+                    currentPageIndex--;
+                    renderCurrentPage();
+                }
+            } 
+            // Se tocchi nella parte centrale/bassa -> Pagina Successiva
+            else {
+                if (currentPageIndex < pages.length - 1) {
+                    currentPageIndex++;
+                    renderCurrentPage();
+                }
+            }
         }
 
         function adjustZoom(amount) {
-            currentFontSize = Math.max(18, Math.min(72, currentFontSize + amount));
+            currentFontSize = Math.max(20, Math.min(72, currentFontSize + amount));
             container.style.fontSize = currentFontSize + 'px';
         }
 
         function resetPosition() {
-            container.scrollTop = 0;
-            currentIndex = 0;
-            updateHighlight();
-        }
-
-        function updateHighlight() {
-            allChunkElements.forEach((el, idx) => {
-                el.classList.remove('current', 'spoken');
-                if (idx < currentIndex) {
-                    el.classList.add('spoken');
-                } else if (idx === currentIndex) {
-                    el.classList.add('current');
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            });
+            currentPageIndex = 0;
+            renderCurrentPage();
         }
 
         initArchive();
