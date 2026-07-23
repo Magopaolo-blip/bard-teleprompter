@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Live Highlight</title>
+    <title>Bard Teleprompter - Smart Match</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -12,8 +12,8 @@
             --accent-blue: #2563eb;
             --accent-blue-hover: #1d4ed8;
             --accent-green: #16a34a;
-            --text-main: #94a3b8; /* Testo non ancora cantato più scuro per contrasto */
-            --text-highlight: #ffffff; /* Testo attivo/cantato */
+            --text-main: #64748b; /* Testo non ancora cantato */
+            --text-highlight: #ffffff; /* Testo cantato */
             --guideline-color: rgba(234, 179, 8, 0.35);
         }
 
@@ -70,22 +70,20 @@
             white-space: pre-wrap;
         }
 
-        /* Stile per le singole parole nel testo */
         .word {
             display: inline-block;
             margin: 0 3px;
-            transition: color 0.15s ease, text-shadow 0.15s ease;
+            transition: color 0.1s ease, transform 0.1s ease;
         }
 
         .word.spoken {
             color: var(--text-highlight);
-            text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
         }
 
         .word.current {
-            color: #facc15; /* Giallo brillante per la parola esatta in corso */
+            color: #facc15; /* Giallo brillante per la parola esatta */
             text-shadow: 0 0 15px rgba(250, 204, 21, 0.8);
-            transform: scale(1.05);
+            transform: scale(1.08);
         }
 
         .guideline {
@@ -178,6 +176,7 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
         let recognition;
         let currentFontSize = 28;
         let currentWordIndex = 0;
+        let songWords = []; // Salverà le parole pulite per il confronto
         let allWordsElements = [];
 
         const container = document.getElementById('teleprompter-container');
@@ -202,8 +201,6 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                 container.innerHTML = "Seleziona una canzone dal menu in alto.";
                 return;
             }
-            
-            // Converte il testo in singoli elementi HTML "word" per poterli evidenziare
             renderFormattedText(songs[index].text);
             resetPosition();
             if (isListening) toggleVoice();
@@ -212,8 +209,8 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
         function renderFormattedText(rawText) {
             container.innerHTML = "";
             allWordsElements = [];
+            songWords = [];
 
-            // Divide il testo preservando gli spazi e andando a capo
             let lines = rawText.split("\n");
             lines.forEach(line => {
                 let lineDiv = document.createElement("div");
@@ -228,7 +225,11 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                             span.className = "word";
                             span.textContent = wordText + " ";
                             lineDiv.appendChild(span);
+                            
                             allWordsElements.push(span);
+                            // Pulisce la parola da punteggiatura e la rende minuscola per un confronto sicuro
+                            let cleanWord = wordText.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"");
+                            songWords.push(cleanWord);
                         }
                     });
                 }
@@ -239,20 +240,17 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
 
         function handleFiles(files) {
             if (files.length === 0) return;
-
             Array.from(files).forEach(file => {
                 let reader = new FileReader();
                 reader.onload = function(e) {
                     let fileContent = e.target.result;
                     let fileTitle = file.name.replace(/\.[^/.]+$/, "");
-
                     let existingIndex = songs.findIndex(s => s.title === fileTitle);
                     if (existingIndex !== -1) {
                         songs[existingIndex].text = fileContent;
                     } else {
                         songs.push({ title: fileTitle, text: fileContent });
                     }
-
                     localStorage.setItem('bard_songs', JSON.stringify(songs));
                     initArchive();
                 };
@@ -278,7 +276,6 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                     el.classList.add('spoken');
                 } else if (idx === currentWordIndex) {
                     el.classList.add('current');
-                    // Fa scorrere automaticamente il contenitore per mantenere la parola corrente in evidenza
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             });
@@ -296,12 +293,21 @@ Seleziona una canzone dal menu in alto o importa un file di testo per iniziare.
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     transcript += event.results[i][0].transcript;
                 }
+
+                // Estrae le parole pronunciate dall'utente pulendole
+                let spokenWords = transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»]/g,"").trim().split(/\s+/);
                 
-                // Conta quante parole sono state pronunciate per avanzare nel testo
-                let spokenWordsCount = transcript.trim().split(/\s+/).length;
-                if (spokenWordsCount > 0 && allWordsElements.length > 0) {
-                    currentWordIndex = Math.min(currentWordIndex + 1, allWordsElements.length - 1);
-                    updateHighlight();
+                if (spokenWords.length > 0 && songWords.length > 0) {
+                    // Prende l'ultima parola detta dall'utente e cerca dove si trova nel testo della canzone a partire dal punto attuale
+                    let lastSpoken = spokenWords[spokenWords.length - 1];
+                    
+                    for (let i = currentWordIndex; i < Math.min(currentWordIndex + 15, songWords.length); i++) {
+                        if (songWords[i] === lastSpoken) {
+                            currentWordIndex = i;
+                            updateHighlight();
+                            break;
+                        }
+                    }
                 }
             };
 
