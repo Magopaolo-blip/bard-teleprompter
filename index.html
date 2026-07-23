@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bard Teleprompter - Page Turn & Zoom</title>
+    <title>Bard Teleprompter - Touch & Scroll</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -11,7 +11,6 @@
             --border-color: #2a2a35;
             --accent-blue: #2563eb;
             --text-main: #f8fafc;
-            --guideline-color: rgba(234, 179, 8, 0.35);
         }
 
         body {
@@ -25,8 +24,6 @@
             height: 100vh;
             overflow: hidden;
             box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
         }
 
         .top-bar {
@@ -59,16 +56,14 @@
             width: 100%;
             max-width: 900px;
             margin: 0 auto;
-            overflow-y: hidden;
+            overflow-y: scroll;
             text-align: center;
             font-size: 32px;
             line-height: 1.6;
-            padding: 40px 24px;
+            padding: 40px 24px 150px 24px;
             box-sizing: border-box;
             white-space: pre-wrap;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            scroll-behavior: smooth;
         }
 
         .controls {
@@ -132,15 +127,15 @@
         <select id="song-select" onchange="loadSelectedSong()">
             <option value="">-- Seleziona un brano dall'archivio --</option>
         </select>
-        <div class="hint-badge">👆 Centro: Pagina Avanti | Alto: Pagina Indietro</div>
+        <div class="hint-badge">👆 Scorri liberamente col dito</div>
         <label class="file-btn">
             📂 Importa .txt
             <input type="file" id="file-input" accept=".txt" multiple onchange="handleFiles(this.files)">
         </label>
     </div>
 
-    <!-- Contenitore del testo a pagine -->
-    <div id="teleprompter-container" onclick="handleScreenTap(event)">
+    <!-- Contenitore del testo con scorrimento libero -->
+    <div id="teleprompter-container">
 Seleziona una canzone dal menu in alto.
     </div>
 
@@ -153,9 +148,6 @@ Seleziona una canzone dal menu in alto.
 
     <script>
         let currentFontSize = 32;
-        let pages = [];
-        let currentPageIndex = 0;
-
         const container = document.getElementById('teleprompter-container');
         const songSelect = document.getElementById('song-select');
 
@@ -174,9 +166,8 @@ Seleziona una canzone dal menu in alto.
         function loadSelectedSong() {
             let index = songSelect.value;
             if (index === "") return;
-            splitIntoPages(songs[index].text);
-            currentPageIndex = 0;
-            renderCurrentPage();
+            container.textContent = songs[index].text;
+            resetPosition();
         }
 
         function handleFiles(files) {
@@ -199,61 +190,13 @@ Seleziona una canzone dal menu in alto.
             });
         }
 
-        function splitIntoPages(rawText) {
-            pages = [];
-            let lines = rawText.split("\n");
-            let currentPageLines = [];
-            
-            lines.forEach(line => {
-                currentPageLines.push(line);
-                if (currentPageLines.length >= 6) {
-                    pages.push(currentPageLines.join("\n"));
-                    currentPageLines = [];
-                }
-            });
-            if (currentPageLines.length > 0) {
-                pages.push(currentPageLines.join("\n"));
-            }
-            if (pages.length === 0) {
-                pages.push(rawText);
-            }
-        }
-
-        function renderCurrentPage() {
-            if (pages.length === 0) return;
-            container.textContent = pages[currentPageIndex];
-        }
-
-        function handleScreenTap(event) {
-            if (pages.length === 0) return;
-            
-            let screenHeight = window.innerHeight;
-            let clickY = event.clientY;
-
-            // Se tocchi nella parte alta dello schermo -> Pagina Indietro
-            if (clickY < screenHeight * 0.3) {
-                if (currentPageIndex > 0) {
-                    currentPageIndex--;
-                    renderCurrentPage();
-                }
-            } 
-            // Se tocchi nella parte centrale/bassa -> Pagina Successiva
-            else {
-                if (currentPageIndex < pages.length - 1) {
-                    currentPageIndex++;
-                    renderCurrentPage();
-                }
-            }
-        }
-
         function adjustZoom(amount) {
             currentFontSize = Math.max(20, Math.min(72, currentFontSize + amount));
             container.style.fontSize = currentFontSize + 'px';
         }
 
         function resetPosition() {
-            currentPageIndex = 0;
-            renderCurrentPage();
+            container.scrollTop = 0;
         }
 
         initArchive();
